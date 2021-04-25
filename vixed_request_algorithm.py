@@ -36,6 +36,7 @@ import json
 from qgis.utils import iface
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (
+    QgsProject,
     QgsProcessing,
     QgsProcessingParameterEnum,
     QgsProcessingParameterExtent,
@@ -43,10 +44,10 @@ from qgis.core import (
     QgsProcessingParameterNumber,
     QgsProcessingParameterFileDestination,
     QgsProcessingParameterString,
-    QgsProcessingParameterDateTime
+    QgsProcessingParameterDateTime,
+    QgsCoordinateTransform,
+    QgsCoordinateReferenceSystem
     )
-
-# from pyproj import Proj
 
 
 class VixedTestAlgorithm(QgsProcessingAlgorithm):
@@ -70,7 +71,7 @@ class VixedTestAlgorithm(QgsProcessingAlgorithm):
     OUTPUT = 'OUTPUT'
     INPUT = 'INPUT'
     SEND_TO = "SEND_TO"
-    EXTENT = 'PROJWIN'
+    EXTENT = 'EXTENT'
     OPTIONS = 'OPTIONS'
     PROCESSORS = "PROCESSORS"
     ESTIMATED_FILESIZE = "Estimated filesize"
@@ -169,8 +170,13 @@ class VixedTestAlgorithm(QgsProcessingAlgorithm):
         """
 
         self.CRS = iface.mapCanvas().mapSettings().destinationCrs().authid()
-
         extent = self.parameterAsExtent(parameters, self.EXTENT, context)
+        crs_dst = QgsCoordinateReferenceSystem("EPSG:4326")
+        crs_src = QgsCoordinateReferenceSystem(QgsProject.instance().crs())
+        geo2proj = QgsCoordinateTransform(crs_src, crs_dst, QgsProject.instance())
+        extent_proj = geo2proj.transform(extent)
+        
+
         with open(os.path.join(self.BASEDIR, 'request_template.json'), mode='r') as json_template_fh:
             template_dict = json.load(json_template_fh)
 
@@ -178,11 +184,13 @@ class VixedTestAlgorithm(QgsProcessingAlgorithm):
         send_to = self.parameterAsString(parameters, self.RECIPIENTS, context)
         
         resolution = self.parameterAsInt(parameters, self.RESOLUTION, context)
+        end_date = self.parameterAsDateTime(parameters, self.END_DATE, context).toString("yyyy-MM-ddTHH:mm:ssZ")
 
-        template_dict['processor_settings']['spatial_resolution'] = self.parameterAsInt(parameters, self.RESOLUTION, context)
+        template_dict['processor_settings']['spatial_resolution'] = resolution
         template_dict['processor_settings']['time_delta_hours'] = self.parameterAsInt(parameters, self.TIMEDELTA, context)
-        # template_dict['processor_settings']['roi'] = 1 # FIXME! self.wktPolygonToDict(extent)
+        template_dict['processor_settings']['roi'] =  self.wktPolygonToDict(extent_proj) # extent_proj.asWktPolygon()
         template_dict['processor_settings']['crs'] = self.EXPORTCRS
+        template_dict['processor_settings']['end_date'] = end_date
         template_dict['send_to'] = [ send_to ]
 
 
@@ -190,11 +198,18 @@ class VixedTestAlgorithm(QgsProcessingAlgorithm):
             json.dump({"send_to": send_to}, tf)
         
         with open(output, mode="w") as output_json:
-            json.dump(template_dict, output_json)
+            json.dump(template_dict, output_json, indent=2)
 
-        filesize =  1 # FIXME! self.calcFileSize(extent, resolution)
+        filesize =  self.calcFileSize(extent, resolution)
 
-        return {self.OUTPUT: output, self.ESTIMATED_FILESIZE: "{:0.2f} MB".format(filesize), self.CRS: self.CRS}
+        return {
+            "OUTPUT": output,
+            "ESTIMATED_FILESIZE": "{:0.2f} MB".format(filesize),
+            "CRS": self.CRS,
+            "EXTENT": extent_proj,
+            "END_DATE": end_date
+        }
+        
 
     def name(self):
         """
@@ -240,13 +255,7 @@ class VixedTestAlgorithm(QgsProcessingAlgorithm):
 
     def wktPolygonToDict(self, extent):
         
-        # pr = Proj(init=self.CRS)
-        pr = None
-
         if self.CRS.upper() != "EPSG:4326":
-            xmin, ymin = pr(extent.xMinimum(), extent.yMinimum(), inverse=True)
-            xmax, ymax = pr(extent.xMaximum(), extent.yMaximum(), inverse=True)
-        else:
             xmin, ymin = (extent.xMinimum(), extent.yMinimum())
             xmax, ymax = (extent.xMaximum(), extent.yMaximum())
 
