@@ -184,7 +184,7 @@ class VixedTestAlgorithm(QgsProcessingAlgorithm):
         send_to = self.parameterAsString(parameters, self.RECIPIENTS, context)
         
         resolution = self.parameterAsInt(parameters, self.RESOLUTION, context)
-        end_date = self.parameterAsDateTime(parameters, self.END_DATE, context).toString("yyyy-MM-ddTHH:mm:ssZ")
+        end_date = self.parameterAsDateTime(parameters, self.END_DATE, context).toUTC().toString("yyyy-MM-ddTHH:mm:ssZ")
 
         template_dict['processor_settings']['spatial_resolution'] = resolution
         template_dict['processor_settings']['time_delta_hours'] = self.parameterAsInt(parameters, self.TIMEDELTA, context)
