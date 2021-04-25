@@ -55,9 +55,7 @@ class VixedTestProvider(QgsProcessingProvider):
         Loads all algorithms belonging to this provider.
         """
         self.addAlgorithm(VixedTestAlgorithm())
-        self.addAlgorithm(VixedOnlineAlgorithm())
-        # add additional algorithms here
-        # self.addAlgorithm(MyOtherAlgorithm())
+        # self.addAlgorithm(VixedOnlineAlgorithm())
 
     def id(self):
         """
