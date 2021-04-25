@@ -30,16 +30,23 @@ __copyright__ = '(C) 2021 by Mikhail Itkin/NPOLAR'
 
 __revision__ = '$Format:%H$'
 
+import os
+import json
+
+from qgis.utils import iface
 from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (
     QgsProcessing,
     QgsProcessingParameterEnum,
     QgsProcessingParameterExtent,
-    QgsFeatureSink,
     QgsProcessingAlgorithm,
-    QgsProcessingParameterFeatureSource,
-    QgsProcessingParameterFeatureSink
+    QgsProcessingParameterNumber,
+    QgsProcessingParameterFileDestination,
+    QgsProcessingParameterString,
+    QgsProcessingParameterDateTime
     )
+
+# from pyproj import Proj
 
 
 class VixedTestAlgorithm(QgsProcessingAlgorithm):
@@ -72,12 +79,15 @@ class VixedTestAlgorithm(QgsProcessingAlgorithm):
     RECIPIENTS = "RECIPIENTS"
     EXPORTCRS = "epsg:32633"
     CRS = "CRS"
+    END_DATE = "END_DATE"
 
     def initAlgorithm(self, config):
         """
         Here we define the inputs and output of the algorithm, along
         with some other properties.
         """
+
+        self.BASEDIR, self.FILENAME = os.path.split(os.path.abspath(__file__))
 
         processors = [
             self.tr("SAR"),
@@ -99,61 +109,177 @@ class VixedTestAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
-        # We add the input vector features source. It can have any kind of
-        # geometry.
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.INPUT,
-                self.tr('Input layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+            QgsProcessingParameterExtent(
+                self.EXTENT,
+                self.tr('Select extent')
             )
         )
 
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
         self.addParameter(
-            QgsProcessingParameterFeatureSink(
-                self.OUTPUT,
-                self.tr('Output layer')
-            )
-        )
+            QgsProcessingParameterNumber(
+                self.RESOLUTION,
+                self.tr(
+                    'Spatial resolution (meters per pixel)'),
+                defaultValue=300,
+                minValue=50,
+                type=QgsProcessingParameterNumber.Integer
+        ))
+
+        self.addParameter(QgsProcessingParameterNumber(
+            self.TIMEDELTA,
+            self.tr(
+                'Temporal aggregation window (hours)'),
+            defaultValue=24,
+            minValue=1,
+            type=QgsProcessingParameterNumber.Integer
+        ))
+
+        self.addParameter(QgsProcessingParameterDateTime(
+            self.END_DATE,
+            self.tr("[optional] End date/time boundary for searching past data")
+        ))
+
+        try:
+            with open(os.path.join(self.BASEDIR, 'tempdata'), mode='r') as tf:
+                temp_dict = json.loads(tf.read())
+                default_recipient = temp_dict['send_to']
+        except:
+            default_recipient = "user@example.com" 
+
+        default_recipient = "user@example.com"
+
+        self.addParameter(QgsProcessingParameterString(
+            self.RECIPIENTS,
+            self.tr('Send to email address'),
+            defaultValue = default_recipient,
+            multiLine = False
+
+        ))
+
+        self.addParameter(QgsProcessingParameterFileDestination(
+            self.OUTPUT,
+            self.tr('Output request file (JSON)'),
+            self.tr('JSON files (*.json)')
+        ))
 
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
         """
 
-        # Retrieve the feature source and sink. The 'dest_id' variable is used
-        # to uniquely identify the feature sink, and must be included in the
-        # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(parameters, self.INPUT, context)
-        (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT,
-                context, source.fields(), source.wkbType(), source.sourceCrs())
+        self.CRS = iface.mapCanvas().mapSettings().destinationCrs().authid()
 
-        # Compute the number of steps to display within the progress bar and
-        # get features from source
-        total = 100.0 / source.featureCount() if source.featureCount() else 0
-        features = source.getFeatures()
+        extent = self.parameterAsExtent(parameters, self.EXTENT, context)
+        with open(os.path.join(self.BASEDIR, 'request_template.json'), mode='r') as json_template_fh:
+            template_dict = json.load(json_template_fh)
 
-        for current, feature in enumerate(features):
-            # Stop the algorithm if cancel button has been clicked
-            if feedback.isCanceled():
-                break
+        output = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
+        send_to = self.parameterAsString(parameters, self.RECIPIENTS, context)
+        
+        resolution = self.parameterAsInt(parameters, self.RESOLUTION, context)
 
-            # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
+        template_dict['processor_settings']['spatial_resolution'] = self.parameterAsInt(parameters, self.RESOLUTION, context)
+        template_dict['processor_settings']['time_delta_hours'] = self.parameterAsInt(parameters, self.TIMEDELTA, context)
+        # template_dict['processor_settings']['roi'] = 1 # FIXME! self.wktPolygonToDict(extent)
+        template_dict['processor_settings']['crs'] = self.EXPORTCRS
+        template_dict['send_to'] = [ send_to ]
 
-            # Update the progress bar
-            feedback.setProgress(int(current * total))
 
-        # Return the results of the algorithm. In this case our only result is
-        # the feature sink which contains the processed features, but some
-        # algorithms may return multiple feature sinks, calculated numeric
-        # statistics, etc. These should all be included in the returned
-        # dictionary, with keys matching the feature corresponding parameter
-        # or output names.
-        return {self.OUTPUT: dest_id}
+        with open(os.path.join(self.BASEDIR, 'tempdata'), mode='w') as tf:
+            json.dump({"send_to": send_to}, tf)
+        
+        with open(output, mode="w") as output_json:
+            json.dump(template_dict, output_json)
+
+        filesize =  1 # FIXME! self.calcFileSize(extent, resolution)
+
+        return {self.OUTPUT: output, self.ESTIMATED_FILESIZE: "{:0.2f} MB".format(filesize), self.CRS: self.CRS}
+
+    def name(self):
+        """
+        Returns the algorithm name, used for identifying the algorithm. This
+        string should be fixed for the algorithm, and must not be localised.
+        The name should be unique within each provider. Names should contain
+        lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return 'Generate SAR request form'
+
+    def displayName(self):
+        """
+        Returns the translated algorithm name, which should be used for any
+        user-visible display of the algorithm name.
+        """
+        return self.tr(self.name())
+
+    def group(self):
+        """
+        Returns the name of the group this algorithm belongs to. This string
+        should be localised.
+        """
+        return self.tr(self.groupId())
+
+    def groupId(self):
+        """
+        Returns the unique ID of the group this algorithm belongs to. This
+        string should be fixed for the algorithm, and must not be localised.
+        The group id should be unique within each provider. Group id should
+        contain lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return ''
+
+    def tr(self, string):
+        return QCoreApplication.translate('Processing', string)
+
+
+    def createInstance(self):
+        return VixedRequestsAlgorithm()
+
+
+    def wktPolygonToDict(self, extent):
+        
+        # pr = Proj(init=self.CRS)
+        pr = None
+
+        if self.CRS.upper() != "EPSG:4326":
+            xmin, ymin = pr(extent.xMinimum(), extent.yMinimum(), inverse=True)
+            xmax, ymax = pr(extent.xMaximum(), extent.yMaximum(), inverse=True)
+        else:
+            xmin, ymin = (extent.xMinimum(), extent.yMinimum())
+            xmax, ymax = (extent.xMaximum(), extent.yMaximum())
+
+        polygon = { "coordinates" : [
+            [
+            [xmin, ymin],
+            [xmax, ymin],
+            [xmax, ymax],
+            [xmin, ymax],
+            [xmin, ymin]
+            ]
+        ], "type": "Polygon" }
+        
+        return polygon
+    
+    def calcFileSize(self, extent, resolution, compression_ratio=100, channels_no=1):
+
+        if self.CRS.upper() == "EPSG:4326":
+            # pr = Proj(init="EPSG:32633")
+            pr = None
+            xmin, ymin = pr(extent.xMinimum(), extent.yMinimum())
+            xmax, ymax = pr(extent.xMaximum(), extent.yMaximum())
+        else:
+            xmin, ymin = (extent.xMinimum(), extent.yMinimum())
+            xmax, ymax = (extent.xMaximum(), extent.yMaximum())
+
+        width  = xmax - xmin
+        height = ymax - ymin
+        area = width * height
+        filesize = (area / (float(resolution) ** 2) ) * 8 / 1e6 / (compression_ratio / channels_no)
+
+        return filesize
+
 
     def name(self):
         """
