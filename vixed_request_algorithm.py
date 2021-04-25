@@ -24,9 +24,6 @@
 __author__ = 'Mikhail Itkin'
 __date__ = '2021-04-24'
 __copyright__ = '(C) 2021 by Mikhail Itkin'
-
-# This will get replaced with a git SHA1 when you do a git archive
-
 __revision__ = '$Format:%H$'
 
 import os
@@ -229,14 +226,8 @@ class VixedTestAlgorithm(QgsProcessingAlgorithm):
     
     def calcFileSize(self, extent, resolution, compression_ratio=100, channels_no=1):
 
-        if self.CRS.upper() == "EPSG:4326":
-            # pr = Proj(init="EPSG:32633")
-            pr = None
-            xmin, ymin = pr(extent.xMinimum(), extent.yMinimum())
-            xmax, ymax = pr(extent.xMaximum(), extent.yMaximum())
-        else:
-            xmin, ymin = (extent.xMinimum(), extent.yMinimum())
-            xmax, ymax = (extent.xMaximum(), extent.yMaximum())
+        xmin, ymin = (extent.xMinimum(), extent.yMinimum())
+        xmax, ymax = (extent.xMaximum(), extent.yMaximum())
 
         width  = xmax - xmin
         height = ymax - ymin
