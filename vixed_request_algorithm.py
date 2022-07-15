@@ -308,7 +308,7 @@ class Product(object):
 
 def get_product(name):
     product_data = {
-        'SAR': {
+        'sar': {
             'dtype': 'Uint8',
             'opts': {
                 "sensoroperationalmode": "EW",
@@ -316,7 +316,7 @@ def get_product(name):
                 "producttype": "GRD"
             }
         },
-        'CHLA': {
+        'chla': {
             'dtype': 'Float32',
             'opts': {
                 "platformname": "Sentinel-3",
