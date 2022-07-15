@@ -185,7 +185,8 @@ class VixedRequestsAlgorithm(QgsProcessingAlgorithm):
         resolution = self.parameterAsInt(parameters, self.RESOLUTION, context)
         end_date = self.parameterAsDateTime(parameters, self.END_DATE, context).toUTC().toString("yyyy-MM-ddTHH:mm:ssZ")
 
-        template_dict['processor'] = processor_name
+        template_dict['processor'] = "processors"
+        template_dict['processor_settings']['processor'] = processor_name 
         template_dict['processor_settings']['spatial_resolution'] = resolution
         template_dict['processor_settings']['time_delta_hours'] = self.parameterAsInt(parameters, self.TIMEDELTA, context)
         template_dict['processor_settings']['roi'] =  self.wktPolygonToDict(extent_proj)
