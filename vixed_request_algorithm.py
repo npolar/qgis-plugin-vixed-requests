@@ -87,15 +87,15 @@ class VixedRequestsAlgorithm(QgsProcessingAlgorithm):
         self.BASEDIR, self.FILENAME = os.path.split(os.path.abspath(__file__))
 
         self.processors = [
-            self.tr("SAR"),
-            self.tr("CHLA")
+            self.tr("sar"),
+            self.tr("chla")
         ]
 
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.PROCESSORS,
                 self.tr("Vixed Processors"),
-                options=self.processors, defaultValue='SAR'
+                options=self.processors, defaultValue='sar'
             )
         )
 
