@@ -88,7 +88,7 @@ class VixedRequestsAlgorithm(QgsProcessingAlgorithm):
 
         self.processors = [
             self.tr("sar"),
-            self.tr("chla")
+            self.tr("chl-a")
         ]
 
         self.addParameter(
@@ -316,7 +316,7 @@ def get_product(name):
                 "producttype": "GRD"
             }
         },
-        'chla': {
+        'chl-a': {
             'dtype': 'Float32',
             'opts': {
                 "platformname": "Sentinel-3",
